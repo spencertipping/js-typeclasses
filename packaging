@@ -1,0 +1,21 @@
+Question: How is packaging done optimally? That is, what are design patterns that lend themselves to easy access of packaged, hierarchically-organized systems?
+Here are some constraints:
+
+  1. When a package is referenced, its name must be referred to only once. That is, you can't have constructs such as this:
+       using ("com.spencertipping.ja::pkg", function (pkg) {...})
+     because the package name would then be mentioned twice, not just once.
+
+  2. Package importation must be lexically-scoped.
+
+  OK, how about this:
+
+    using ("com.spencertipping.ja::<x, y>, com.java.something_cool, foo, bar", function (s) {
+      eval (s);
+      // Now the variables x, y, something_cool, foo, and bar exist.
+    });
+
+  This solution is inelegant because it uses eval(). Eval is a greater evil than anything else mentioned here.
+
+A second perspective on packaging is that by reducing the number of global references (since some will be created anyway), we decrease the likelihood of name
+collision. So, for instance, we may create just a few different functions and be reasonably confident that they won't cause problems. This may be the most
+sensible option, since anything else is likely to be much more complex.
