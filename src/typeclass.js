@@ -24,91 +24,109 @@
 // That said, we need to build up to the point where checking makes sense. Each typeclass belongs to the 'typeclass' typeclass. This will make more sense in
 // code than in English.
 
-   tc.bind = function (f, t) {
-     return function () {return f.apply (t, arguments);};
-   };
+    tc.bind = function (f, t) {
+      return function () {return f.apply (t, arguments);};
+    };
 
-   tc.attachable = {
-     members: {
-       attach: function (obj) {
-         // Naively assume that we're not causing problems. The /this/ reference will be bound to the object directly, not to one of the objects here.
-         for (var k in this.members)
-           if (this.members[k].constructor === Function) obj[k] = tc.bind (this.members[k], obj);
-       },
+    tc.attachable = {
+      members: {
+        attach: function (obj) {
+          // Naively assume that we're not causing problems. The /this/ reference will be bound to the object directly, not to one of the objects here.
+          for (var k in this.members)
+            if (this.members[k].constructor === Function) obj[k] = tc.bind (this.members[k], obj);
+            else                                          obj[k] = this.members[k];
+        },
 
-       detach: function (obj) {
-         // Assume that the members did not overwrite anything. Later on we will implement checking.
-         for (var k in this.members) delete obj[k];
-       }
-     }
-   };
+        detach: function (obj) {
+          // Assume that the members did not overwrite anything. Later on we will implement checking.
+          for (var k in this.members) delete obj[k];
+        }
+      }
+    };
 
-   // The attachable typeclass is itself attachable. This is the only bootstrapped component; everything else is legitimately within the framework.
-   tc.bind (tc.attachable.members.attach, tc.attachable) (tc.attachable);
+    // The attachable typeclass is itself attachable. This is the only bootstrapped component; everything else is legitimately within the framework.
+    tc.bind (tc.attachable.members.attach, tc.attachable) (tc.attachable);
 
 // The AddableWithHooks typeclass
 //
 // This typeclass allows hooks to be set when it is attached or detached from an object. The hooks have the option of throwing an error or triggering other
 // actions, but their return values are discarded.
 
-   tc.addable_with_hooks = {
-     members: {
-       add: function () {
-         for (var i = 0, l = arguments.length; i < l; ++i) {
-           for (var j = 0, lh = this.add_hooks.length; j < lh; ++j)
-             this.add_hooks[j].apply (this, [arguments[i]]);
-           this.attach (arguments[i]);
-         }
-       },
+    tc.addable_with_hooks = {
+      members: {
+        add: function () {
+          for (var i = 0, l = arguments.length; i < l; ++i) {
+            for (var j = 0, lh = this.before_add_hooks.length; j < lh; ++j)
+              this.before_add_hooks[j].apply (this, [arguments[i]]);
 
-       remove: function () {
-         for (var i = 0, l = arguments.length; i < l; ++i) {
-           for (var j = 0, lh = this.remove_hooks.length; j < lh; ++j)
-             this.remove_hooks[j].apply (this, [arguments[i]]);
-           this.detach (arguments[i]);
-         }
-       }
-     }
-   };
+            this.attach (arguments[i]);
 
-   tc.attachable.attach (tc.addable_with_hooks);
-   tc.addable_with_hooks.attach (tc.addable_with_hooks);
+            for (var j = 0, lh = this.after_add_hooks.length; j < lh; ++j)
+              this.after_add_hooks[j].apply (this, [arguments[i]]);
+          }
+        },
 
-   // The arrays are initialized by this constructor.
-   tc.addable_with_hooks.add_hooks = [function (obj) {
-     obj.add_hooks = obj.add_hooks || [];
-     obj.remove_hooks = obj.add_hooks || [];
-   }];
+        remove: function () {
+          for (var i = 0, l = arguments.length; i < l; ++i) {
+            for (var j = 0, lh = this.before_remove_hooks.length; j < lh; ++j)
+              this.before_remove_hooks[j].apply (this, [arguments[i]]);
 
-   tc.addable_with_hooks.add (tc.attachable, tc.addable_with_hooks);
+            this.detach (arguments[i]);
+
+            for (var j = 0, lh = this.after_remove_hooks.length; j < lh; ++j)
+              this.after_remove_hooks[j].apply (this, [arguments[i]]);
+          }
+        }
+      }
+    };
+
+    tc.attachable.attach (tc.addable_with_hooks);
+    tc.addable_with_hooks.attach (tc.addable_with_hooks);
+
+    // The arrays are initialized by this constructor.
+    tc.addable_with_hooks.before_add_hooks = [function (obj) {
+      obj.before_add_hooks    = obj.before_add_hooks    || [];
+      obj.after_add_hooks     = obj.after_add_hooks     || [];
+      obj.before_remove_hooks = obj.before_remove_hooks || [];
+      obj.after_remove_hooks  = obj.after_remove_hooks  || [];
+    }];
+
+    tc.addable_with_hooks.after_add_hooks = [];
+
+    tc.addable_with_hooks.add (tc.attachable, tc.addable_with_hooks);
 
 // Introspection
 //
 // A typeclass needs to be able to determine (1) whether it has already been installed on an object, and (2) whether it collides with an object. These
 // operations are called "introspection."
 
-   tc.is_introspective = {
-     members: {
-       collides_with: function (obj) {
-         for (var k in this.members) if (obj[k] !== undefined) return true;
-         return false;
-       },
+    tc.is_introspective = {
+      members: {
+        collides_with: function (obj) {
+          for (var k in this.members) if (obj[k] !== undefined) return true;
+          return false;
+        },
 
-       implemented_on: function (obj) {
-         // Note that if another equivalent typeclass provides these methods or members, that's OK. All we care about is whether the members
-         // exist. Realistically, we have no good way of determining whether the typeclass has actually been installed without installing some form of explicit
-         // RTTI because functions are opaquely bound and values may have been altered.
-         for (var k in this.members) if (obj[k] === undefined) return false;
-         return true;
-       }
-     }
-   };
+        implemented_on: function (obj) {
+          // Note that if another equivalent typeclass provides these methods or members, that's OK. All we care about is whether the members
+          // exist. Realistically, we have no good way of determining whether the typeclass has actually been installed without installing some form of explicit
+          // RTTI because functions are opaquely bound and values may have been altered.
+          //
+          // One exception: The empty typeclass is not implemented on anything. This is because the only reason one would have an empty typeclass is to
+          // provide a constructor, which is a legitimate use. In this case, we cannot make any assumptions about whether the typeclass has been applied to an
+          // object, so we must re-apply.
+          var any_members = false;
+          for (var k in this.members) if ((any_members = true) && obj[k] === undefined) return false;
+          return any_members;
+        }
+      }
+    };
 
-   // Something of a kludge here because we need to keep updating all of the typeclass parts. Later on, all of these elements will be unified into a proper
-   // Typeclass type.
-   tc.attachable.add (tc.is_introspective);
-   tc.addable_with_hooks.add (tc.is_introspective);
-   tc.is_introspective.add (tc.attachable, tc.addable_with_hooks, tc.is_introspective);
+    // Something of a kludge here because we need to keep updating all of the typeclass parts. Later on, all of these elements will be unified into a proper
+    // Typeclass type.
+    tc.attachable.add (tc.is_introspective);
+    tc.addable_with_hooks.add (tc.is_introspective);
+    tc.is_introspective.add (tc.attachable, tc.addable_with_hooks, tc.is_introspective);
 
 // Hooks to provide useful behavior
 //
@@ -131,84 +149,104 @@
 // The bottom line is that in general, you need to be aware of the prerequisites of a typeclass before using it and you should be prepared to manually extend
 // the object beforehand using a separate typeclass.
 
-   tc.detect_collisions = function (obj) {
-     for (var k in this.members)
-       if (obj[k] !== undefined) throw {error:     "tc.detect_collisions: Colliding attribute: " + k,
-                                        obj:       obj,
-                                        typeclass: this};
-   };
+    tc.detect_collisions = function (obj) {
+      for (var k in this.members)
+        if (obj[k] !== undefined) throw {error:     "tc.detect_collisions: Colliding attribute: " + k,
+                                         obj:       obj,
+                                         typeclass: this};
+    };
 
-   tc.requires = function () {
-     var external_args = arguments;
+    tc.requires = function () {
+      var external_args = arguments;
 
-     return function (obj) {
-       // Takes any number of typeclasses and ensures that each one exists.
-       for (var i = 0, l = external_args.length; i < l; ++i)
-         if (! external_args[i].implemented_on (obj)) throw {error:     "tc.requires: Object did not implement required typeclass.",
-                                                             object:    obj,
-                                                             typeclass: external_args[i]};
-     };
-   };
+      return function (obj) {
+        // Takes any number of typeclasses and ensures that each one exists.
+        for (var i = 0, l = external_args.length; i < l; ++i)
+          if (! external_args[i].implemented_on (obj)) throw {error:     "tc.requires: Object did not implement required typeclass.",
+                                                              object:    obj,
+                                                              typeclass: external_args[i]};
+      };
+    };
 
-   tc.brings = function () {
-     var external_args = arguments;
+    tc.brings = function () {
+      var external_args = arguments;
 
-     return function (obj) {
-       for (var i = 0, l = external_args.length; i < l; ++i)
-         if (! external_args[i].implemented_on (obj)) external_args[i].add (obj);
-     };
-   };
+      return function (obj) {
+        for (var i = 0, l = external_args.length; i < l; ++i)
+          if (! external_args[i].implemented_on (obj)) external_args[i].add (obj);
+      };
+    };
 
-   tc.constructor = tc.destructor = function (f) {
-     // Wraps f so that it can be used as an add_hook or remove_hook but it behaves as a constructor or destructor.
-     return function (obj) {
-       f.apply (obj, [this]);
-     };
-   };
+    tc.constructor = tc.destructor = function (f) {
+      // Wraps f so that it can be used as an add_hook or remove_hook but it behaves as a constructor or destructor.
+      return function (obj) {
+        f.apply (obj, [this]);
+      };
+    };
 
 // The Typeclass typeclass
 //
 // Finally we can combine all of this stuff to produce the Typeclass typeclass. This typeclass is not particularly different from other typeclasses, but it does
 // provide some nice features such as integrated requisition processing, constructor and destructor support, and collision detection.
 
-   tc.typeclass = {
-     members: {
-       brings:          function () {this.add_hooks.push (tc.brings.apply (this, arguments));},
-       requires:        function () {this.add_hooks.push (tc.requires.apply (this, arguments));},
-       add_constructor: function (f) {this.add_hooks.push (tc.constructor (f));},
-       add_destructor:  function (f) {this.remove_hooks.push (tc.destructor (f));},
-       add_member:      function (name, value) {this.members[name] = value},
+    tc.typeclass = {
+      members: {
+        brings:          function () {this.before_add_hooks.push (tc.brings.apply (this, arguments)); return this;},
+        requires:        function () {this.before_add_hooks.push (tc.requires.apply (this, arguments)); return this;},
+        add_constructor: function (f) {this.after_add_hooks.push (tc.constructor (f)); return this;},
+        add_destructor:  function (f) {this.before_remove_hooks.push (tc.destructor (f)); return this;},
+        add_member:      function (name, value) {this.members[name] = value; return this;},
 
-       remove_member:   function (name) {
-         var member = this.members[name];
-         delete this.members[name];
-         return member;
-       },
+        remove_member:   function (name) {
+          var member = this.members[name];
+          delete this.members[name];
+          return member;
+        },
 
-       create:          function (obj) {
-         // A convenient way to create an instance of a typeclass. The object is optional; if not provided, then a regular old Object will be used.
-         if (! obj) obj = new Object ();
-         this.add (obj);
-         return obj;
-       }
-     }
-   };
+        create:          function (obj) {
+          // A convenient way to create an instance of a typeclass. The object is optional; if not provided, then a regular old Object will be used.
+          if (! obj) obj = new Object ();
+          this.add (obj);
+          return obj;
+        }
+      }
+    };
 
-   // Some weird bootstrapping logic. First, we need to make sure that we can add the Typeclass typeclass to objects that should be typeclasses. Next, we need
-   // to make sure it has add/remove hooks. Then, we need to add it to itself so that its constructor brings it along.
-   tc.attachable.attach (tc.typeclass);
-   tc.addable_with_hooks.add (tc.typeclass);
-   tc.typeclass.attach (tc.typeclass);
+    // Some weird bootstrapping logic. First, we need to make sure that we can add the Typeclass typeclass to objects that should be typeclasses. Next, we need
+    // to make sure it has add/remove hooks. Then, we need to add it to itself so that its constructor brings it along.
+    tc.attachable.attach (tc.typeclass);
+    tc.addable_with_hooks.add (tc.typeclass);
+    tc.typeclass.attach (tc.typeclass);
 
-   // OK, so build the typeclass from the ground up, and then make sure that it is a member of its own typeclass.
-   tc.typeclass.brings (tc.attachable, tc.addable_with_hooks, tc.is_introspective);
-   tc.typeclass.add_constructor (function () {
-     if (! this.members) this.members = {};
-   });
-   tc.typeclass.add (tc.typeclass);
+    // OK, so build the typeclass from the ground up, and then make sure that it is a member of its own typeclass.
+    tc.typeclass.brings (tc.attachable, tc.addable_with_hooks, tc.is_introspective);
+    tc.typeclass.add_constructor (function () {
+      if (! this.members) this.members = {};
+    });
+    tc.typeclass.add (tc.typeclass);
 
 // Making things consistent
 //
-// Each one of the original attachable entities is in fact a real typeclass, or it should be. So we need to make that true now.
+// Each one of the original attachable entities is in fact a real typeclass, or it should be. So we need to make that true now. After this, the Typeclass
+// typeclass is properly implemented by all typeclasses in existence, and new typeclasses may be created by tc.typeclass.create.
 
-   tc.typeclass.add (tc.attachable, tc.addable_with_hooks, tc.is_introspective);
+    tc.typeclass.add (tc.attachable, tc.addable_with_hooks, tc.is_introspective);
+
+// Classes and initializers
+//
+// When an object is created, its constructor_args attribute is set to the parameter hash given to the constructor function. Then, constructors have access to
+// those parameters and may perform any additional initialization.
+
+    tc.class_generator = function (base_class) {
+      // This is tricky. The function created below will have a /this/ reference of Window. Since the function is itself a typeclass, it will have attributes
+      // such as add_constructor, brings, requires, etc; however, a bound wrapper function will have no such attributes. So if the function were to use /this/ to
+      // create() the resulting object, then the /this/ would have to refer to the bound result, which entails another binding ad infinitum. Rather than doing
+      // this, we simply create an explicit reference and refer to it externally without a function binding.
+      var result = tc.typeclass.create (function (args) {
+        var new_object = (base_class || Object) ();
+        new_object.constructor_args = args;
+        return result.create (new_object);
+      });
+
+      return result;
+    };

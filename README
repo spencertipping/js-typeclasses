@@ -1,0 +1,4 @@
+This is an MIT-licensed typeclass implementation for JavaScript.
+The ideas are similar to Haskell's typeclasses, but made appropriately
+dynamic for JavaScript use. See leading comments in src/typeclass.js
+for more details.
