@@ -8,7 +8,7 @@
 // meaningful. Asserting that an object belongs to a given type makes available methods and attributes reflecting that assertion. Since JavaScript has no
 // variable-level type information (i.e. it is dynamically typed), these assertions apply to individual objects and bypass the prototype system.
 
-   var tc = {};
+    var tc = {};
 
 // The Attachable typeclass
 //
@@ -243,7 +243,7 @@
       // create() the resulting object, then the /this/ would have to refer to the bound result, which entails another binding ad infinitum. Rather than doing
       // this, we simply create an explicit reference and refer to it externally without a function binding.
       var result = tc.typeclass.create (function (args) {
-        var new_object = (base_class || Object) ();
+        var new_object = (base_class || Object) (args);
         new_object.constructor_args = args;
         return result.create (new_object);
       });
