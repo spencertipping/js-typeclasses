@@ -242,8 +242,19 @@
       // such as add_constructor, brings, requires, etc; however, a bound wrapper function will have no such attributes. So if the function were to use /this/ to
       // create() the resulting object, then the /this/ would have to refer to the bound result, which entails another binding ad infinitum. Rather than doing
       // this, we simply create an explicit reference and refer to it externally without a function binding.
+      //
+      // The extra short-circuit logic here is to make sure that we're using a function to construct the new class. It is possible that you would want to create
+      // a new typeclass that behaved like a constructor function, so you would say something off the wall like this:
+      // 
+      //   var my_super_class = tc.class_generator (tc.class_generator);
+      //
+      // The result would be that instances of my_super_class would themselves be constructor functions; that is,
+      //
+      //   var instance = my_super_class ({...});
+      //
+      // would result in instance being a function too.
       var result = tc.typeclass.create (function (args) {
-        var new_object = (base_class || Object) (args);
+        var new_object = ((base_class && base_class.constructor === Function && base_class) || Object) (args);
         new_object.constructor_args = args;
         return result.create (new_object);
       });
