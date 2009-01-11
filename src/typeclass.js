@@ -10,6 +10,36 @@
 
     var tc = {};
 
+// Preliminaries
+// 
+// Some objects in JavaScript are unboxed by default. For instance, if you do this:
+//
+//   var x = 5;
+//   x.foo = "bar";
+//   x.foo  // => undefined
+//
+// because 5 is unboxed. However, it can also be declared in a boxed form:
+//
+//   var x = new Number (5);
+//   x.foo = "bar";
+//   x.foo  // => "bar"
+//
+// This function automatically boxes unboxed values.
+
+    tc.box = function (x) {
+      // First, find out whether x is boxed or unboxed. Boxed values can accept object assignment, but unboxed values do not.
+      x[tc.box.test_attribute] = tc.box.sentinel_value;
+      if (x[tc.box.test_attribute] === tc.box.sentinel_value) {
+        delete x[tc.box.test_attribute];
+        return x;
+      } else
+        // We need to box x. (Yes, this is legal in FF and IE5, not sure about other browsers...)
+        return new x.constructor (x);
+    };
+
+    tc.box.test_attribute = "_____extremely_improbable_attribute_name_and_this_is_bad_coding_style_I_know_____";
+    tc.box.sentinel_value = {};
+
 // The Attachable typeclass
 //
 // In the spirit of reflection, I'm defining a typeclass that represents the operations that can be performed on typeclasses. First, typeclasses can be
@@ -33,8 +63,8 @@
         attach: function (obj) {
           // Naively assume that we're not causing problems. The /this/ reference will be bound to the object directly, not to one of the objects here.
           for (var k in this.members)
-            if (this.members[k].constructor === Function) obj[k] = tc.bind (this.members[k], obj);
-            else                                          obj[k] = this.members[k];
+            if (this.members[k] && this.members[k].constructor === Function) obj[k] = tc.bind (this.members[k], obj);
+            else                                                             obj[k] = this.members[k];
         },
 
         detach: function (obj) {
@@ -56,25 +86,17 @@
       members: {
         add: function () {
           for (var i = 0, l = arguments.length; i < l; ++i) {
-            for (var j = 0, lh = this.before_add_hooks.length; j < lh; ++j)
-              this.before_add_hooks[j].apply (this, [arguments[i]]);
-
+            for (var j = 0, lh = this.before_add_hooks.length; j < lh; ++j) this.before_add_hooks[j].apply (this, [arguments[i]]);
             this.attach (arguments[i]);
-
-            for (var j = 0, lh = this.after_add_hooks.length; j < lh; ++j)
-              this.after_add_hooks[j].apply (this, [arguments[i]]);
+            for (var j = 0, lh = this.after_add_hooks.length;  j < lh; ++j) this.after_add_hooks[j].apply (this, [arguments[i]]);
           }
         },
 
         remove: function () {
           for (var i = 0, l = arguments.length; i < l; ++i) {
-            for (var j = 0, lh = this.before_remove_hooks.length; j < lh; ++j)
-              this.before_remove_hooks[j].apply (this, [arguments[i]]);
-
+            for (var j = 0, lh = this.before_remove_hooks.length; j < lh; ++j) this.before_remove_hooks[j].apply (this, [arguments[i]]);
             this.detach (arguments[i]);
-
-            for (var j = 0, lh = this.after_remove_hooks.length; j < lh; ++j)
-              this.after_remove_hooks[j].apply (this, [arguments[i]]);
+            for (var j = 0, lh = this.after_remove_hooks.length;  j < lh; ++j) this.after_remove_hooks[j].apply (this, [arguments[i]]);
           }
         }
       }
@@ -179,9 +201,7 @@
 
     tc.constructor = tc.destructor = function (f) {
       // Wraps f so that it can be used as an add_hook or remove_hook but it behaves as a constructor or destructor.
-      return function (obj) {
-        f.apply (obj, [this]);
-      };
+      return function (obj) {f.apply (obj, [this]);};
     };
 
 // The Typeclass typeclass
@@ -191,11 +211,12 @@
 
     tc.typeclass = {
       members: {
-        brings:          function () {this.before_add_hooks.push (tc.brings.apply (this, arguments)); return this;},
-        requires:        function () {this.before_add_hooks.push (tc.requires.apply (this, arguments)); return this;},
-        add_constructor: function (f) {this.after_add_hooks.push (tc.constructor (f)); return this;},
-        add_destructor:  function (f) {this.before_remove_hooks.push (tc.destructor (f)); return this;},
-        add_member:      function (name, value) {this.members[name] = value; return this;},
+        brings:          function ()                        {this.before_add_hooks.push (tc.brings.apply (this, arguments)); return this;},
+        requires:        function ()                        {this.before_add_hooks.push (tc.requires.apply (this, arguments)); return this;},
+        add_constructor: function (f)                       {this.after_add_hooks.push (tc.constructor (f)); return this;},
+        add_destructor:  function (f)                       {this.before_remove_hooks.push (tc.destructor (f)); return this;},
+        add_member:      function (name, value)             {this.members[name] = value; return this;},
+        alias:           function (new_name, existing_name) {this.members[new_name] = this.members[existing_name]; return this;},
 
         remove_member:   function (name) {
           var member = this.members[name];
@@ -204,8 +225,11 @@
         },
 
         create:          function (obj) {
-          // A convenient way to create an instance of a typeclass. The object is optional; if not provided, then a regular old Object will be used.
+          // A convenient way to create an instance of a typeclass. The object is optional; if not provided, then a regular old Object will be used. In any
+          // case, the value will be boxed if necessary. This may be required because JavaScript has flexible primitives. For more information, see the comments
+          // on the tc.box function.
           if (! obj) obj = new Object ();
+          obj = tc.box (obj);
           this.add (obj);
           return obj;
         }
@@ -242,22 +266,13 @@
       // such as add_constructor, brings, requires, etc; however, a bound wrapper function will have no such attributes. So if the function were to use /this/ to
       // create() the resulting object, then the /this/ would have to refer to the bound result, which entails another binding ad infinitum. Rather than doing
       // this, we simply create an explicit reference and refer to it externally without a function binding.
-      //
-      // The extra short-circuit logic here is to make sure that we're using a function to construct the new class. It is possible that you would want to create
-      // a new typeclass that behaved like a constructor function, so you would say something off the wall like this:
-      // 
-      //   var my_super_class = tc.class_generator (tc.class_generator);
-      //
-      // The result would be that instances of my_super_class would themselves be constructor functions; that is,
-      //
-      //   var instance = my_super_class ({...});
-      //
-      // would result in instance being a function too.
       var result = tc.typeclass.create (function (args) {
-        var new_object = ((base_class && base_class.constructor === Function && base_class) || Object) (args);
+        var new_object = (base_class || Object) (args);
         new_object.constructor_args = args;
         return result.create (new_object);
       });
 
       return result;
     };
+
+    tc.typeclass_ctor = tc.class_generator ().brings (tc.typeclass);

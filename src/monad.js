@@ -13,22 +13,19 @@
 
 // Basic monadic conventions
 //
-// When you add a monadic typeclass to an object O, O will gain a field called 'monadic_typeclass' that is used to keep track of which monadic typeclass it
-// belongs to. (It goes away if/when you remove the monad.) This is used to give the mbind method a way to pass the typeclass to its bound function.
+// Why all of the class_generators? Here's why. First, we want the monadic_typeclass class to be a constructor and not a regular typeclass, since we want to use
+// it as a constructor function. We also want each monad itself to be a constructor, since they are standalone objects most of the time.
 
-    mn.monadic_typeclass = tc.class_generator (tc.class_generator).add_constructor (function () {
+    mn.monadic_typeclass = tc.class_generator (tc.typeclass_ctor).add_constructor (function () {
       // The /this/ here is the new monadic typeclass. It accepts as a constructor parameter the new instance of that typeclass. Inside the constructor, the
       // /this/ object is the thing that the monadic typeclass is being added to.
-      this.add_constructor (function (monadic_typeclass) {
-        this.monadic_typeclass = monadic_typeclass;
-      });
-
-      this.add_destructor (function () {
-        delete this.monadic_typeclass;
-      });
-
       this.add_member ("mbind",   this.constructor_args.mbind);
       this.add_member ("mreturn", this.constructor_args.mreturn);
+    });
+
+    mn.singular_monad = tc.class_generator (mn.monadic_typeclass).add_constructor (function () {
+      this.add_constructor (function () {this.value = this;});
+      this.add_member ("extract", function () {return this.value;});
     });
 
 // Standard monads
@@ -43,33 +40,34 @@
       mbind: function (f) {
         var result = [];
         for (var i = 0, l = this.length; i < l; ++i)
-          result = result.concat (f.apply (this.monadic_typeclass.mreturn, [this[i]]));
-        return result;
+          result = result.concat (f.apply (this.mreturn, [this[i]]));
+        return mn.array_monad.create (result);
       },
       
       mreturn: function (x) {
-        return this.monadic_typeclass.create ([x]);
-      }
-    });
+        return mn.array_monad.create ([x]);
+      }});
 
-    mn.maybe_monad = mn.monadic_typeclass ({
+    mn.maybe_monad = mn.singular_monad ({
       mbind: function (f) {
-        if (this.value !== undefined) return f.apply (this.monadic_typeclass.mreturn, [this.value]);
+        if (this.value !== undefined) return f.apply (this.mreturn, [this.value]);
         else                          return this;
       },
 
       mreturn: function (x) {
-        var result = this.monadic_typeclass.create ();
-        result.value = x;
-        return result;
-      }
-    }).add_member ("extract", function () {return this.value;});
+        return mn.maybe_monad.create (x);
+      }});
+    
+      mn.maybe_monad.add_member ("is_nothing", function () {return this.value === undefined;});
+      
+      mn.maybe_monad.nothing = mn.maybe_monad.create ();
+      mn.maybe_monad.nothing.value = undefined;
 
-    mn.error_monad = mn.monadic_typeclass ({
+    mn.error_monad = mn.singular_monad ({
       mbind: function (f) {
         if (this.error) return this;
         else
-          try {return f.apply (this.monadic_typeclass.mreturn, [this.value]);}
+          try {return f.apply (this.mreturn, [this.value]);}
           catch (e) {
             var result = this.monadic_typeclass.create ();
             result.error = e;
@@ -78,9 +76,7 @@
       },
 
       mreturn: function (x) {
-        var result = this.monadic_typeclass.create ();
-        result.value = x;
-        return result;
-      }
-    }).add_member ("extract", function () {return this.value;}).
-       add_member ("get_error", function () {return this.error;});
+        return mn.error_monad.create (x);
+      }});
+    
+      mn.error_monad.add_member ("get_error", function () {return this.error;});
