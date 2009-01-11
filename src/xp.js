@@ -17,9 +17,9 @@
 // worried about.
 
     xp.ajax_class = tc.class_generator (function () {
-      try {return new XMLHttpRequest ();}                   catch {}
-      try {return new ActiveXObject ("Msxml2.XMLHTTP");}    catch {}
-      try {return new ActiveXObject ("Microsoft.XMLHTTP");} catch {}
+      try {return new XMLHttpRequest ();}                   catch (e) {}
+      try {return new ActiveXObject ("Msxml2.XMLHTTP");}    catch (e) {}
+      try {return new ActiveXObject ("Microsoft.XMLHTTP");} catch (e) {}
 
       return null;
     });
