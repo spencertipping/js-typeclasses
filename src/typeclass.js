@@ -54,11 +54,13 @@
 // That said, we need to build up to the point where checking makes sense. Each typeclass belongs to the 'typeclass' typeclass. This will make more sense in
 // code than in English.
 
+    tc.bind = function (f, t) {return function () {return f.apply (t, arguments);};};
+
     tc.attachable = {
       members: {
         attach: function (obj) {
           // Naively assume that we're not clobbering stuff. The /this/ reference will be bound to the object directly, not to one of the objects here.
-          for (var k in this.members) if (this.members[k] && this.members[k].apply) obj[k] = function () {return this.members[k].apply (obj, arguments);};
+          for (var k in this.members) if (this.members[k] && this.members[k].apply) obj[k] = tc.bind (this.members[k], obj);
                                       else                                          obj[k] = this.members[k];
         },
 
