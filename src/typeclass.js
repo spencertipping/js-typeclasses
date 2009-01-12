@@ -253,27 +253,6 @@
 
     tc.typeclass.add (tc.attachable, tc.addable_with_hooks, tc.is_introspective);
 
-// Collision detection
-//
-// Some typeclasses care about collision detection and some don't. For those that do, you should bring() collision_detection.
-
-    tc.detects_collisions = tc.typeclass.create ().add_constructor (function () {
-      // This is too coupled for my taste; at some point I will add a proper add/remove constructor interface and partition constructors and destructors into
-      // their own arrays, invoked by the add/remove hooks. For now, though, it works in normal cases.
-      this.collision_detection_constructor_index = this.before_add_hooks.length;
-      this.add_constructor (function (typeclass) {
-        // The /this/ in question is now the object.
-        if (typeclass.collides_with (this)) throw {object: this, typeclass: typeclass, message: "Typeclass collision detected."};
-      });
-    }).add_destructor (function () {
-      // Splicing a single element removes it.
-      this.before_add_hooks.splice (this.collision_detection_constructor_index, 1);
-    });
-
-    // Any typeclasses created after this will detect collisions. If you don't want this behavior in a typeclass you create, then you'll need to explicitly
-    // remove the tc.detects_collisions typeclass from your object.
-    tc.typeclass.brings (tc.detects_collisions);
-
 // Classes and initializers
 //
 // When an object is created, its constructor_args attribute is set to the parameter hash given to the constructor function. Then, constructors have access to
