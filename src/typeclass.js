@@ -30,14 +30,14 @@
       // First, find out whether x is boxed or unboxed. Boxed values can accept object assignment, but unboxed values do not.
       x[tc.box.test_attribute] = tc.box.sentinel_value;
       if (x[tc.box.test_attribute] === tc.box.sentinel_value) {
-        delete x[tc.box.test_attribute];
+        x[tc.box.test_attribute] = undefined;
         return x;
       } else
         // We need to box x. (Yes, this is legal in FF and IE5, not sure about other browsers...)
         return new x.constructor (x);
     };
 
-    tc.box.test_attribute = "_____extremely_improbable_attribute_name_and_this_is_bad_coding_style_I_know_____";
+    tc.box.test_attribute = "_____extremely_improbable_attribute_____";
     tc.box.sentinel_value = {};
 
 // The Attachable typeclass
