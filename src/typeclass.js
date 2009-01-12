@@ -54,17 +54,12 @@
 // That said, we need to build up to the point where checking makes sense. Each typeclass belongs to the 'typeclass' typeclass. This will make more sense in
 // code than in English.
 
-    tc.bind = function (f, t) {
-      return function () {return f.apply (t, arguments);};
-    };
-
     tc.attachable = {
       members: {
         attach: function (obj) {
-          // Naively assume that we're not causing problems. The /this/ reference will be bound to the object directly, not to one of the objects here.
-          for (var k in this.members)
-            if (this.members[k] && this.members[k].constructor === Function) obj[k] = tc.bind (this.members[k], obj);
-            else                                                             obj[k] = this.members[k];
+          // Naively assume that we're not clobbering stuff. The /this/ reference will be bound to the object directly, not to one of the objects here.
+          for (var k in this.members) if (this.members[k] && this.members[k].apply) obj[k] = function () {return this.members[k].apply (obj, arguments);};
+                                      else                                          obj[k] = this.members[k];
         },
 
         detach: function (obj) {
@@ -75,7 +70,7 @@
     };
 
     // The attachable typeclass is itself attachable. This is the only bootstrapped component; everything else is legitimately within the framework.
-    tc.bind (tc.attachable.members.attach, tc.attachable) (tc.attachable);
+    tc.attachable.members.attach.apply (tc.attachable, [tc.attachable]);
 
 // The AddableWithHooks typeclass
 //
@@ -252,9 +247,30 @@
 // Making things consistent
 //
 // Each one of the original attachable entities is in fact a real typeclass, or it should be. So we need to make that true now. After this, the Typeclass
-// typeclass is properly implemented by all typeclasses in existence, and new typeclasses may be created by tc.typeclass.create.
+// typeclass is properly implemented by all typeclasses in existence, and new typeclasses may be created with tc.typeclass.create.
 
     tc.typeclass.add (tc.attachable, tc.addable_with_hooks, tc.is_introspective);
+
+// Collision detection
+//
+// Some typeclasses care about collision detection and some don't. For those that do, you should bring() collision_detection.
+
+    tc.detects_collisions = tc.typeclass.create ().add_constructor (function () {
+      // This is too coupled for my taste; at some point I will add a proper add/remove constructor interface and partition constructors and destructors into
+      // their own arrays, invoked by the add/remove hooks. For now, though, it works in normal cases.
+      this.collision_detection_constructor_index = this.before_add_hooks.length;
+      this.add_constructor (function (typeclass) {
+        // The /this/ in question is now the object.
+        if (typeclass.collides_with (this)) throw {object: this, typeclass: typeclass, message: "Typeclass collision detected."};
+      });
+    }).add_destructor (function () {
+      // Splicing a single element removes it.
+      this.before_add_hooks.splice (this.collision_detection_constructor_index, 1);
+    });
+
+    // Any typeclasses created after this will detect collisions. If you don't want this behavior in a typeclass you create, then you'll need to explicitly
+    // remove the tc.detects_collisions typeclass from your object.
+    tc.typeclass.brings (tc.detects_collisions);
 
 // Classes and initializers
 //
@@ -274,5 +290,22 @@
 
       return result;
     };
+
+    // There are two ways one could go about producing the proper class for the Typeclass typeclass. Below, I first create a class that creates regular objects,
+    // and then indicate that it brings along the Typeclass typeclass. Alternatively, I could have based my objects on the typeclass's /create/ method, like
+    // this:
+    //
+    //   tc.typeclass_ctor = tc.class_generator (tc.typeclass.create);
+    //
+    // There is not a particular advantage to doing things either way, however I prefer the more canonical brings() notation because it emphasizes the point
+    // that there is an inclusion occurring rather than a subclassing. Also, it allows for parameterization of the base class, which could be useful in cases
+    // where, for instance, you want each produced typeclass to itself be a constructor function:
+    //
+    //   tc.typeclass_ctor = tc.class_generator (tc.class_generator ()).brings (tc.typeclass);
+    //
+    // In this case, each typeclass would be promoted to be a constructor function as well, allowing this:
+    //
+    //   var my_typeclass = tc.typeclass_ctor ();
+    //   var my_instance  = my_typeclass ();
 
     tc.typeclass_ctor = tc.class_generator ().brings (tc.typeclass);
