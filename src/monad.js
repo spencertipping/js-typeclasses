@@ -37,24 +37,24 @@
 // allows retrieval of the value and of the error as well.
 
     mn.array_monad = mn.monadic_typeclass ({
-      mbind: function (f) {
+      mbind(f) {
         var result = [];
         for (var i = 0, l = this.length; i < l; ++i)
           result = result.concat (f.apply (this.mreturn, [this[i]]));
         return mn.array_monad.create (result);
       },
       
-      mreturn: function (x) {
+      mreturn(x) {
         return mn.array_monad.create ([x]);
       }});
 
     mn.maybe_monad = mn.singular_monad ({
-      mbind: function (f) {
+      mbind(f) {
         if (this.value !== undefined) return f.apply (this.mreturn, [this.value]);
         else                          return this;
       },
 
-      mreturn: function (x) {
+      mreturn(x) {
         return mn.maybe_monad.create (x);
       }});
     
@@ -64,7 +64,7 @@
       mn.maybe_monad.nothing.value = undefined;
 
     mn.error_monad = mn.singular_monad ({
-      mbind: function (f) {
+      mbind(f) {
         if (this.error) return this;
         else
           try {return f.apply (this.mreturn, [this.value]);}
@@ -75,7 +75,7 @@
           }
       },
 
-      mreturn: function (x) {
+      mreturn(x) {
         return mn.error_monad.create (x);
       }});
     
